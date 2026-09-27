@@ -46,31 +46,43 @@ emit("与全量对照差异 =", fingerprint(closed.state) === fingerprint(fullCl
 
 
 // ---- 异常路径探针：真调用实现，看它报出什么码（不是从样例里抄）----
-try {
-  step(Object.assign({}, { budget: 1,
-    state: { config: {}, merged: [], ledger: [], applied: [] },
-    events: [{ id: 1, kind: "layer", name: "", values: { a: 1 } }] }));
-  emit("空层名报码", "没有报错");
-} catch (error) {
-  emit("空层名报码", error && error.code ? error.code : String(error.message));
+const __probes = {};
+function probe(label, events) {
+  try {
+    step(Object.assign({}, { budget: 1,
+      state: { config: {}, merged: [], ledger: [], applied: [] },
+      events: events }));
+    __probes[label] = { threw: false, code: null };
+  } catch (error) {
+    __probes[label] = { threw: true, code: error && error.code ? error.code : null };
+  }
+  emit(label, __probes[label].code || "没有报错");
 }
-try {
-  step(Object.assign({}, { budget: 1,
-    state: { config: {}, merged: [], ledger: [], applied: [] },
-    events: [{ id: 1, kind: "layer", name: "base", values: {} }] }));
-  emit("空层内容报码", "没有报错");
-} catch (error) {
-  emit("空层内容报码", error && error.code ? error.code : String(error.message));
-}
-try {
-  step(Object.assign({}, { budget: 1,
-    state: { config: {}, merged: [], ledger: [], applied: [] },
-    events: [{ id: 1, kind: "peek", name: "base" }] }));
-  emit("事件不合法报码", "没有报错");
-} catch (error) {
-  emit("事件不合法报码", error && error.code ? error.code : String(error.message));
-}
+probe("空层名报码", [{ id: 1, kind: "layer", name: "", values: { a: 1 } }]);
+probe("空层内容报码", [{ id: 1, kind: "layer", name: "base", values: {} }]);
+probe("事件不合法报码", [{ id: 1, kind: "peek", name: "base" }]);
 
+
+// ---- 七条机检断言：不看期望值表，直接对实现的运行结果下断言 ----
+const machineChecks = [
+  ["两档合并层数不同", first.merged_count !== wide.merged_count],
+  ["收尾前账大于零而收尾后归零", first.ledger_before > 0 && closed.state.ledger.length === 0],
+  ["拆两轮中间态不同而收尾态一致",
+      fingerprint(r2.state) !== fingerprint(first.state)
+      && fingerprint(closedTwo.state) === fingerprint(closed.state)],
+  ["重放不再合并", replay.merged_count === 0],
+  ["工作计数不超事件条数", first.judged <= events.length && first.judged <= first.judged_bound],
+  ["与全量对照为零", (fingerprint(closed.state) === fingerprint(fullClosed.state) ? 0 : 1) === 0],
+  ["异常探针真调且带 code",
+      __probes["空层名报码"].threw && typeof __probes["空层名报码"].code === "string"
+      && __probes["空层内容报码"].threw && typeof __probes["空层内容报码"].code === "string"
+      && __probes["事件不合法报码"].threw && typeof __probes["事件不合法报码"].code === "string"]
+]
+let __checkBad = 0;
+for (const [label, ok] of machineChecks) {
+  if (ok) { console.log("机检通过 " + label); }
+  else { __checkBad += 1; console.log("机检失败 " + label); }
+}
 
 // ---- 期望值（参考模型算出，与题面给的验收数值一致）----
 const EXPECTED = {
@@ -131,4 +143,5 @@ for (const [label, want] of Object.entries(EXPECTED)) {
   else { __bad += 1; console.log("不一致 " + label + " 期望 " + JSON.stringify(want) + " 实际 " + JSON.stringify(got)); }
 }
 console.log("验收项 " + (Object.keys(EXPECTED).length - __bad) + "/" + Object.keys(EXPECTED).length + " 通过");
-process.exit(__bad === 0 ? 0 : 1);
+console.log("机检断言 " + (machineChecks.length - __checkBad) + "/" + machineChecks.length + " 通过");
+process.exit(__bad === 0 && __checkBad === 0 ? 0 : 1);
