@@ -1,0 +1,11 @@
+{
+  "budget": 1,
+  "layer_error_code": "E_BAD_LAYER",
+  "event_error_code": "E_BAD_EVENT",
+  "state": { "config": {}, "merged": [], "ledger": [], "applied": [] },
+  "events": [
+    { "id": 1, "kind": "layer", "name": "base", "values": { "a": 1, "b": 2 } },
+    { "id": 2, "kind": "layer", "name": "env", "values": { "b": 5 } },
+    { "id": 3, "kind": "layer", "name": "cli", "values": { "a": 9, "c": 3 } }
+  ]
+}
